@@ -2,37 +2,50 @@
 
 Single-table design for the mobile-money transaction event stream.
 
-## Table: `pulse-events`
+## Table: `pulse_event_stream`
 
 | Attribute | Type | Role |
 |-----------|------|------|
-| `PK` | String | `merchant_zone#hour` (e.g. `dakar-almadies#2026-06-27T14`) |
-| `SK` | String | `txn_id` |
-| `category` | String | Product category (e.g. `biscuits`, `baby_formula`) |
-| `amount_fcfa` | Number | Transaction amount |
-| `merchant_id` | String | Anonymized merchant reference |
-| `created_at` | String | ISO 8601 timestamp |
+| `merchant_zone#hour` | String | Partition key (e.g. `North District#2026-06-28T16`) |
+| `txn_id` | String | Sort key (UUID) |
+| `category#hour` | String | Category + hour (GSI partition key) |
+| `qty` | Number | Quantity sold |
+| `price` | Number | Transaction amount |
+
+## Global Secondary Index: `category-hour-index`
+
+| Key | Attribute |
+|-----|-----------|
+| HASH | `category#hour` |
+| RANGE | `txn_id` |
 
 ## Access Patterns
 
 ### AP1 — Hot-zone reads (dashboard)
 
-- **Query:** `PK = :zoneHour`
+- **Query:** `merchant_zone#hour = :zoneHour`
 - **Use case:** "What sold in zone X in the last hour?"
-- **Latency target:** single-digit ms
+- **API:** `GET /api/demand`
 
 ### AP2 — Category trend (anomalies)
 
-- **Query:** GSI `category#hour` = `:categoryHour`
-- **Use case:** Detect category spikes (e.g. biscuits +240% in zone)
-- **GSI:** `GSI1PK` = `category#hour`, `GSI1SK` = `txn_id`
+- **Query:** Compare current vs previous hour partition for a zone
+- **Use case:** Detect category spikes (e.g. beverages +240%)
+- **API:** `GET /api/anomalies`
+- **GSI:** Available for cross-zone category queries via `category-hour-index`
 
 ### AP3 — Webhook ingest (write-heavy)
 
-- **PutItem:** `PK`, `SK`, attributes
-- **Use case:** Mobile money webhook batch writes from Wave/Orange/MTN
-- **Throughput:** millions of low-latency writes
+- **PutItem:** partition key, sort key, attributes
+- **Use case:** Mobile money webhook writes from Wave/Orange/MTN
+- **API:** `POST /api/webhooks/mobile-money`
 
 ## Aurora DSQL (merchant state)
 
-Separate store for merchant directory, WhatsApp OTP sessions, and subscription billing — active-active multi-region for merchants moving between Dakar and Abidjan.
+Separate store for merchant directory, subscriptions, and agent message drafts.
+
+| Table | Purpose |
+|-------|---------|
+| `merchant_directory` | Merchant identity + zone |
+| `subscriptions` | Billing status (7,000 FCFA/month) |
+| `agent_messages` | WhatsApp draft approval queue |

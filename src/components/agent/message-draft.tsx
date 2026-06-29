@@ -20,7 +20,7 @@ export function MessageDraft() {
           <button
             type="button"
             onClick={() => setStatus("approved")}
-            className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-500"
+            className="min-h-[44px] bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-500"
           >
             Approve & send
           </button>
@@ -29,7 +29,7 @@ export function MessageDraft() {
           <button
             type="button"
             onClick={() => setStatus("sent")}
-            className="rounded-md bg-zinc-700 px-4 py-2 text-sm text-zinc-300"
+            className="min-h-[44px] bg-zinc-700 px-4 py-3 text-sm text-zinc-300"
           >
             Confirm send
           </button>

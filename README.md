@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pulse — Live Demand Intelligence
 
-## Getting Started
+B2B dashboard for West African mobile-money merchants. Next.js frontend with **DynamoDB** (transaction event stream) and **Aurora DSQL** (merchant directory, subscriptions, agent drafts).
 
-First, run the development server:
+## Local development
+
+**Port:** Pulse always runs on **3001** (avoids conflicts with other projects on 3000).
 
 ```bash
+cd pulse-dashboard
+cp .env.example .env.local   # fill in AWS credentials
+npm install
+npm run init:aws             # create DynamoDB table + GSI, seed DSQL
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3001](http://localhost:3001).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## AWS setup
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Purpose |
+|--------|---------|
+| `npm run init:dynamodb` | Create `pulse_event_stream` table + `category-hour-index` GSI |
+| `npm run init:dsql` | Create `agent_messages`, `merchant_directory`, `subscriptions` |
 
-## Learn More
+## API routes
 
-To learn more about Next.js, take a look at the following resources:
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/api/health` | GET | Service + AWS config check |
+| `/api/demand` | GET | Live zone demand (`?zone=North%20District`) |
+| `/api/anomalies` | GET | Hour-over-hour demand spikes |
+| `/api/subscribers` | GET | Merchant directory from DSQL |
+| `/api/agent/draft` | GET | Pending WhatsApp draft from DSQL |
+| `/api/agent/approve` | POST | Deploy draft (`{ "draftId": "draft-001" }`) |
+| `/api/admin/stats` | GET | Live DynamoDB + DSQL counts |
+| `/api/webhooks/mobile-money` | POST | Ingest mobile-money transaction |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Demo webhook
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+curl -X POST http://localhost:3001/api/webhooks/mobile-money \
+  -H "Content-Type: application/json" \
+  -d "{\"zoneId\":\"North District\",\"item\":\"beverages\",\"qty\":12,\"price\":5000}"
+```
 
-## Deploy on Vercel
+```bash
+curl http://localhost:3001/api/demand
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## DynamoDB access patterns
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [`src/docs/access-patterns.md`](src/docs/access-patterns.md).
+
+- **PK:** `merchant_zone#hour` · **SK:** `txn_id`
+- **GSI:** `category-hour-index` on `category#hour` + `txn_id`
+
+## Bedrock ledger ingest (optional)
+
+Requires Bedrock quota for `amazon.nova-lite-v1:0` in `us-west-2`:
+
+```bash
+npx tsx src/lib/test_ingest.ts
+```
